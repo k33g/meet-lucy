@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -62,7 +63,9 @@ func main() {
 
 	model := Model{
 		Name: os.Getenv("MODEL_LUCY_Q8_0"), Score: 0,
+		//Name: os.Getenv("MODEL_QWEN3_LATEST"), Score: 0,
 	}
+
 
 	client := openai.NewClient(
 		option.WithBaseURL(baseURL),
@@ -71,7 +74,7 @@ func main() {
 
 	//userQuestion := openai.UserMessage("Say hello to Jean-Luc Picard")
 
-	detectToolCall := func(model string, userQuestion string, theToolNameShouldBe string) int {
+	detectToolCall := func(model string, userQuestion string, theToolNameShouldBe string) (int, time.Duration) {
 
 		success := 0
 
@@ -85,11 +88,13 @@ func main() {
 			Temperature:       openai.Opt(0.0),
 		}
 
-		// Make completion request
+		// Measure completion time
+		startTime := time.Now()
 		completion, err := client.Chat.Completions.New(ctx, params)
+		duration := time.Since(startTime)
 		if err != nil {
 			fmt.Println("🔴 Model:", model, "Error:", err)
-			return success
+			return success, duration
 		}
 
 		toolCalls := completion.Choices[0].Message.ToolCalls
@@ -102,7 +107,7 @@ func main() {
 				fmt.Println("🟢 Model:", model, "No function call (not in the tools index)")
 				success = 1
 			}
-			return success
+			return success, duration
 		}
 
 		// Display the tool call(s)
@@ -115,32 +120,41 @@ func main() {
 				success = 1
 			}
 		}
-		return success
+		return success, duration
 
 	}
 
 	numberOfIterations := 10
+	var totalDuration time.Duration
 
 	for i := range numberOfIterations {
 		fmt.Println(i, ". Running detection for models...")
 
 		fmt.Println("🔵 Model:", model)
 		userQuestion := "Tell me why the sky is blue and then say hello to Jean-Luc Picard. I love pineapple pizza!"
-		success1 := detectToolCall(model.Name, userQuestion, "say_hello")
+		success1, duration1 := detectToolCall(model.Name, userQuestion, "say_hello")
 
 		userQuestion = "Where is Bob? Add 2 and 3. What is the capital of France?"
-		success2 := detectToolCall(model.Name, userQuestion, "add_two_numbers")
+		success2, duration2 := detectToolCall(model.Name, userQuestion, "add_two_numbers")
 
 		userQuestion = "The best pizza topping is pineapple. What is the capital of France? I love cooking."
-		success3 := detectToolCall(model.Name, userQuestion, "no_tool_call_expected")
+		success3, duration3 := detectToolCall(model.Name, userQuestion, "no_tool_call_expected")
+
+		iterationDuration := duration1 + duration2 + duration3
+		totalDuration += iterationDuration
 
 		model.Score += success1 + success2 + success3
-		fmt.Println("🟣 Model:", model.Name, "Score:", model.Score)
+		fmt.Printf("🟣 Model: %s Score: %d Duration for this iteration: %.2fs\n", model.Name, model.Score, iterationDuration.Seconds())
 
 	}
 	fmt.Println("Final scores:")
 
-	fmt.Println("- Model:", model.Name, "Final Score:", model.Score, "Percentage:", float64(model.Score)/float64(numberOfIterations*3)*100, "%")
+	fmt.Printf("- Model: %s Final Score: %d Percentage: %.1f%% Total Duration: %.2fs Average per completion: %.2fs\n",
+		model.Name,
+		model.Score,
+		float64(model.Score)/float64(numberOfIterations*3)*100,
+		totalDuration.Seconds(),
+		totalDuration.Seconds()/float64(numberOfIterations*3))
 
 	fmt.Println("Done!")
 
