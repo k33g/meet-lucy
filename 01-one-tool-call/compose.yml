@@ -1,0 +1,20 @@
+# docker compose up --build --no-log-prefix
+services:
+  detect-one-tool:
+    build: .
+    models:
+      lucy-q8_0:
+        endpoint_var: MODEL_RUNNER_BASE_URL
+        model_var: MODEL_LUCY_Q8_0
+      qwen3-latest:
+        endpoint_var: MODEL_RUNNER_BASE_URL
+        model_var: MODEL_QWEN3_LATEST
+
+models:
+  lucy-q8_0:
+    model: hf.co/menlo/lucy-gguf:q8_0
+  qwen3-latest:
+    model: ai/qwen3:latest
+
+
+
